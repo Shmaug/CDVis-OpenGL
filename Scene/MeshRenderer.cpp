@@ -18,13 +18,10 @@ void MeshRenderer::Uniform(std::string name, const std::shared_ptr<Texture>& x) 
 	mUniforms[name].set(x);
 }
 
-MeshRenderer::MeshRenderer() : mVisible(true) { mRenderQueue = 100; }
+MeshRenderer::MeshRenderer() : mVisible(true), mMesh(0), mShader(0) {}
 MeshRenderer::~MeshRenderer() {}
 
-void MeshRenderer::Draw(Camera& camera) {
-	if (!mVisible) return;
-
-	GLuint p = mShader->Use();
+void MeshRenderer::SetUniforms(GLuint p) {
 	int tex = 0;
 	for (const auto& it : mUniforms) {
 		switch (it.second.mType) {
@@ -51,10 +48,21 @@ void MeshRenderer::Draw(Camera& camera) {
 			break;
 		}
 	}
+}
 
-	glUniformMatrix4fv(glGetUniformLocation(p, "ObjectToWorld"), 1, GL_FALSE, &ObjectToWorld()[0][0]);
-	glUniformMatrix4fv(glGetUniformLocation(p, "ViewProjection"), 1, GL_FALSE, &camera.ViewProjection()[0][0]);
+void MeshRenderer::Draw(Camera& camera) {
+	if (!mVisible) return;
+
+	GLuint p = mShader->Use();
+
+	SetUniforms(p);
+	
+	Shader::Uniform(p, "ObjectToWorld", ObjectToWorld());
+	Shader::Uniform(p, "ViewProjection", camera.ViewProjection());
 
 	mMesh->BindVAO();
 	glDrawElements(GL_TRIANGLES, mMesh->ElementCount(), GL_UNSIGNED_INT, 0);
+
+	glUseProgram(0);
+	glBindVertexArray(0);
 }

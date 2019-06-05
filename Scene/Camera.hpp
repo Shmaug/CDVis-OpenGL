@@ -1,6 +1,9 @@
 #pragma once
 
 #include "Object.hpp"
+#include "../Pipeline/Texture.hpp"
+#include "../Pipeline/Mesh.hpp"
+#include "../Pipeline/Shader.hpp"
 
 #include <gl/glew.h>
 
@@ -10,20 +13,23 @@ public:
 	~Camera();
 
 	void Set();
+	void Resolve();
+	void ResolveDepth();
 
-	inline glm::vec4 PerspectiveBounds() const { return mPerspectiveBounds; }
 	inline float FieldOfView() const { return mFieldOfView; }
 	inline float Near() const { return mNear; }
 	inline float Far() const { return mFar; }
 	inline unsigned int PixelWidth() const { return mPixelWidth; }
 	inline unsigned int PixelHeight() const { return mPixelHeight; }
+	inline unsigned int SampleCount() const { return mSampleCount; }
 
-	inline void PerspectiveBounds(const glm::vec4& f) { mPerspectiveBounds = f; mFieldOfView = 0.f; Dirty(); }
-	inline void FieldOfView(float f) { mPerspectiveBounds = glm::vec4(); mFieldOfView = f; Dirty(); }
+	inline void PerspectiveBounds(const glm::vec4& p) { mPerspectiveBounds = p; mFieldOfView = 0.f; Dirty(); }
+	inline void FieldOfView(float f) { mPerspectiveBounds = glm::vec4(0.f); mFieldOfView = f; Dirty(); }
 	inline void Near(float n) { mNear = n; Dirty(); }
 	inline void Far(float f) { mFar = f; Dirty(); }
-	inline void PixelWidth(unsigned int w) { mPixelWidth = w; mFramebufferDirty = true; Dirty(); }
-	inline void PixelHeight(unsigned int h) { mPixelHeight = h; mFramebufferDirty = true; Dirty(); }
+	inline void PixelWidth(unsigned int w) { mPixelWidth = w; Dirty(); mFramebufferDirty = true; }
+	inline void PixelHeight(unsigned int h) { mPixelHeight = h; Dirty(); mFramebufferDirty = true; }
+	inline void SampleCount(unsigned int s) { mSampleCount = s; Dirty(); mFramebufferDirty = true; }
 
 	inline glm::mat4 View() { UpdateTransform(); return mView; }
 	inline glm::mat4 Projection() { UpdateTransform(); return mProjection; }
@@ -31,6 +37,8 @@ public:
 
 	inline GLuint ColorBuffer() const { return mColorBuffer; }
 	inline GLuint DepthBuffer() const { return mDepthBuffer; }
+	inline GLuint ResolveColorBuffer() const { return mResolveColorBuffer; }
+	inline GLuint ResolveDepthBuffer() const { return mResolveDepthBuffer; }
 
 private:
 	bool mOrthographic;
@@ -41,17 +49,26 @@ private:
 	float mFar;
 	unsigned int mPixelWidth;
 	unsigned int mPixelHeight;
+	unsigned int mSampleCount;
+	glm::vec4 mPerspectiveBounds;
 
 	glm::mat4 mView;
 	glm::mat4 mProjection;
 	glm::mat4 mViewProjection;
-	glm::vec4 mPerspectiveBounds;
+
+	std::shared_ptr<Mesh> mGizmoMesh;
+	static unsigned int sCameraCount;
+	static std::shared_ptr<Shader> sGizmoShader;
 
 	bool mFramebufferDirty;
 	GLuint mFrameBuffer;
+	GLuint mResolveFrameBuffer;
 	GLuint mColorBuffer;
 	GLuint mDepthBuffer;
+	GLuint mResolveColorBuffer;
+	GLuint mResolveDepthBuffer;
 
 protected:
-	bool UpdateTransform() override;
+	virtual bool UpdateTransform() override;
+	virtual void DrawGizmo(Camera& camera) override;
 };

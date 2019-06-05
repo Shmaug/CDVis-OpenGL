@@ -1,40 +1,24 @@
 #include "VRDevice.hpp"
+#include "../Util/Util.hpp"
 
-#include <glm/gtx/matrix_decompose.hpp>
+#include "VRInteraction.hpp"
+
+#include <set>
 
 using namespace std;
 using namespace glm;
 
-mat4 VR2GL(const vr::HmdMatrix34_t& matPose) {
-	return mat4(
-		matPose.m[0][0], matPose.m[1][0], matPose.m[2][0], 0.0,
-		matPose.m[0][1], matPose.m[1][1], matPose.m[2][1], 0.0,
-		matPose.m[0][2], matPose.m[1][2], matPose.m[2][2], 0.0,
-		matPose.m[0][3], matPose.m[1][3], matPose.m[2][3], 1.0f
-	);
-}
-void VR2GL(const vr::HmdMatrix34_t& mat, vec3& position, quat& rotation) {
-	mat4 m4 = VR2GL(mat);
-
-	vec3 scale;
-	vec3 skew;
-	vec4 perspective;
-	decompose(m4, scale, rotation, position, skew, perspective);
-
-	// rh coordinates to lh coordinates: flip z
-	position.z = -position.z;
-	rotation.x = -rotation.x;
-	rotation.y = -rotation.y;
-}
-
-VRDevice::VRDevice(unsigned int index) : mDeviceIndex(index) { mRenderQueue = 200; }
+VRDevice::VRDevice(unsigned int index) : mDeviceIndex(index), mHmd(nullptr), mTracking(false), mState({}), mLastState({}),
+mDevicePosition(vec3()), mDeviceRotation(quat(1.f, 0.f, 0.f, 0.f)),
+mDeltaDevicePosition(vec3()), mDeltaDeviceRotation(quat(1.f, 0.f, 0.f, 0.f)),
+mLastDevicePosition(vec3()), mLastDeviceRotation(quat(1.f, 0.f, 0.f, 0.f)) {}
 VRDevice::~VRDevice() {}
 
 void VRDevice::TriggerHapticPulse(unsigned short duration) const {
 	if (mHmd) mHmd->TriggerHapticPulse(mDeviceIndex, 0, duration);
 }
 
-void VRDevice::UpdateDevice(vr::IVRSystem* hmd, const vr::TrackedDevicePose_t& pose) {
+void VRDevice::UpdateDevice(const vector<shared_ptr<Object>>& scene, vr::IVRSystem* hmd, const vr::TrackedDevicePose_t& pose) {
 	mHmd = hmd;
 	mLastDevicePosition = mDevicePosition;
 	mLastDeviceRotation = mDeviceRotation;
@@ -53,31 +37,29 @@ void VRDevice::UpdateDevice(vr::IVRSystem* hmd, const vr::TrackedDevicePose_t& p
 		hmd->GetControllerState(mDeviceIndex, &mState, sizeof(vr::VRControllerState_t));
 	}
 	auto this_controller = dynamic_pointer_cast<VRDevice>(shared_from_this());
-	bool grab = false;
-	bool activate = false;
 
-	/*
 	#pragma region Interaction
 	bool grab = ButtonPressed(VRInteraction::GrabButton);
 	bool grabStart = ButtonPressedFirst(VRInteraction::GrabButton);
 	bool activate = ButtonPressed(VRInteraction::ActivateButton);
 	bool activateStart = ButtonPressedFirst(VRInteraction::ActivateButton);
 
-
 	// interact with objects
-	static vector<shared_ptr<Object>> boundsIntersect;
+	static unordered_set<shared_ptr<Object>> boundsIntersect;
 	boundsIntersect.clear();
-	GetScene()->Intersect(BoundingSphere(mDevicePosition, .025f), boundsIntersect);
+	for (const auto& it : scene)
+		if (it->Bounds().Intersects(mDevicePosition, .025f))
+			boundsIntersect.insert(dynamic_pointer_cast<Object>(it));
 
 	for (auto it = mHovered.begin(); it != mHovered.end();) {
-		if (boundsIntersect.find(dynamic_pointer_cast<Object>(*it)) == -1) {
+		if (boundsIntersect.count(dynamic_pointer_cast<Object>(*it)) == 0) {
 			(*it)->HoverExit(this_controller);
 			it = mHovered.erase(it);
 		} else 
 			it++;
 	}
-	for (unsigned int i = 0; i < boundsIntersect.size(); i++) {
-		auto g = dynamic_pointer_cast<VRInteractable>(boundsIntersect[i]);
+	for (auto& i : boundsIntersect) {
+		auto g = dynamic_pointer_cast<VRInteractable>(i);
 		if (!g) continue;
 
 		if (!mHovered.count(g)) {
@@ -94,34 +76,34 @@ void VRDevice::UpdateDevice(vr::IVRSystem* hmd, const vr::TrackedDevicePose_t& p
 		// Drag start
 		if (grabStart && g->Draggable()) {
 			DragOperation* d = nullptr;
-			for (unsigned int k = 0; k < mDragging.size(); k++) {
-				auto o = mDragging[k].mObject.lock();
+			for (auto& it = mDragging.begin(); it != mDragging.end();) {
+				auto o = (*it).mObject.lock();
 				if (!o) {
-					mDragging.remove(k);
-					k--;
+					it = mDragging.erase(it);
 					continue;
 				}
-				if (dynamic_pointer_cast<Object>(o) == boundsIntersect[i]) {
-					d = &mDragging[k];
+				if (dynamic_pointer_cast<Object>(o) == i) {
+					d = &(*it);
 					break;
 				}
+				it++;
 			}
 			if (!d) {
-				d = &mDragging.push_back({});
+				mDragging.push_back({});
+				d = &mDragging[mDragging.size() - 1];
 
-				XMVECTOR op = XMLoadFloat3(&boundsIntersect[i]->WorldPosition());
-				XMVECTOR or = XMLoadFloat4(&boundsIntersect[i]->WorldRotation());
+				vec3 op = i->WorldPosition();
+				quat or = i->WorldRotation();
 
-				d->mObject = dynamic_pointer_cast<VRInteractable>(boundsIntersect[i]);
-				XMStoreFloat3(&(d->mDragPos), XMVector3Transform(op, XMLoadFloat4x4(&WorldToObject())));
-				XMStoreFloat4(&(d->mDragRotation), XMQuaternionMultiply(or , XMQuaternionInverse(XMLoadFloat4(&mDeviceRotation))));
+				d->mObject = dynamic_pointer_cast<VRInteractable>(i);
+				d->mDragPos = WorldToObject() * vec4(op, 1.f);
+				d->mDragRotation = or * inverse(mDeviceRotation);
 
 				TriggerHapticPulse(600);
 				g->DragStart(this_controller);
 			}
 		}
 	}
-	*/
 
 	if (!activate) {
 		for (const auto& it : mActivated)

@@ -2,12 +2,15 @@
 
 #include <gl/glew.h>
 
+#include <string>
+
 class Texture {
 public:
-	Texture(GLenum internalFormat, GLenum format, GLenum type, unsigned int width, unsigned int height);
-	Texture(GLenum internalFormat, GLenum format, GLenum type, unsigned int width, unsigned int height, unsigned int depth);
-	Texture(GLenum internalFormat, GLenum format, GLenum type, unsigned int width, unsigned int height, void* data);
-	Texture(GLenum internalFormat, GLenum format, GLenum type, unsigned int width, unsigned int height, unsigned int depth, void* data);
+	Texture(const std::string& filename);
+	Texture(unsigned int width, unsigned int height, GLenum internalFormat, GLenum format, GLenum type, GLenum filter);
+	Texture(unsigned int width, unsigned int height, GLenum internalFormat, GLenum format, GLenum type, GLenum filter, void* data);
+	Texture(unsigned int width, unsigned int height, unsigned int depth, GLenum internalFormat, GLenum format, GLenum type, GLenum filter);
+	Texture(unsigned int width, unsigned int height, unsigned int depth, GLenum internalFormat, GLenum format, GLenum type, GLenum filter, void* data);
 	~Texture();
 
 	unsigned int Width() const { return mWidth; }

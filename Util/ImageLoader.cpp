@@ -1,21 +1,20 @@
 #pragma warning(disable: 26451)
+#pragma warning(disable: 4005)
 
-#include "ImageLoader.hpp"
+#define THREAD_COUNT 6
 
 #ifdef WINDOWS
 #include <Shlwapi.h>
 #endif
 
-#ifdef LoadImage
-#undef LoadImage
-#endif
-
 #include <dcmtk/dcmimgle/dcmimage.h>
 #include <dcmtk/dcmdata/dctk.h>
 
+#include <thread>
+#include <vector>
 #include <algorithm>
 
-#include "lodepng.hpp"
+#include "ImageLoader.hpp"
 
 using namespace std;
 using namespace glm;
@@ -50,23 +49,61 @@ string GetFullPath(const string& str) {
 #endif
 }
 
-shared_ptr<Texture> LoadDicomImage(const string& path, vec3& size) {
-	DicomImage* image = new DicomImage(path.c_str());
-	assert(image != NULL);
-	assert(image->getStatus() == EIS_Normal);
+struct Slice {
+	DicomImage* image;
+	double location;
+};
 
-	// Get information
+void ReadDicomSlice(DicomImage*& img, double& x, const string& file, double& spacingX, double& spacingY, double& thickness) {
+	OFCondition cnd;
+
 	DcmFileFormat fileFormat;
-	assert(fileFormat.loadFile(path.c_str()).good());
+	assert((cnd = fileFormat.loadFile(file.c_str())).good());
 	DcmDataset * dataset = fileFormat.getDataset();
+
+	double sx;
+	double sy;
+	double th;
+	cnd = dataset->findAndGetFloat64(DCM_PixelSpacing, sx, 0);
+	cnd = dataset->findAndGetFloat64(DCM_PixelSpacing, sy, 1);
+	cnd = dataset->findAndGetFloat64(DCM_SliceThickness, th, 0);
+
+	spacingX = std::max(sx, spacingX);
+	spacingY = std::max(sy, spacingY);
+	thickness = std::max(th, thickness);
+
+	cnd = dataset->findAndGetFloat64(DCM_SliceLocation, x, 0);
+
+	img = new DicomImage(file.c_str());
+	assert(img != NULL);
+	assert(img->getStatus() == EIS_Normal);
+}
+void ReadDicomImage(DicomImage* img, uint16_t* slice, int w, int h) {
+	img->setMinMaxWindow();
+	uint16_t* pixelData = (uint16_t*)img->getOutputData(16);
+	int j = 0;
+	for (int x = 0; x < w; x++)
+		for (int y = 0; y < h; y++) {
+			j = 2 * (x + y * w);
+			slice[j] = pixelData[x + y * w];
+		}
+}
+void ReadDicomImages(uint16_t* data, vector<Slice>& images, int j, int k, int w, int h) {
+	for (int i = j; i < k; i++) {
+		if (i >= (int)images.size()) break;
+		ReadDicomImage(images[i].image, data + 2 * i * w * h, w, h);
+	}
+}
+
+shared_ptr<Texture> LoadDicomImage(const string& path, vec3& size) {
+	// Get information
+	DicomImage* image = nullptr;
+	double x = 0.0;
 	double spacingX = 0.0;
 	double spacingY = 0.0;
 	double thickness = 0.0;
-	OFCondition cnd;
-	cnd = dataset->findAndGetFloat64(DCM_PixelSpacing, spacingX, 0);
-	cnd = dataset->findAndGetFloat64(DCM_PixelSpacing, spacingY, 1);
-	cnd = dataset->findAndGetFloat64(DCM_SliceThickness, thickness, 0);
-
+	ReadDicomSlice(image, x, path, spacingX, spacingY, thickness);
+	
 	unsigned int w = image->getWidth();
 	unsigned int h = image->getHeight();
 	unsigned int d = 1;
@@ -77,55 +114,27 @@ shared_ptr<Texture> LoadDicomImage(const string& path, vec3& size) {
 	size.z = .001f * (float)thickness;
 
 	uint16_t * data = new uint16_t[w * h * d * 2];
-	ZeroMemory(data, w * h * d * sizeof(uint16_t) * 2);
+	memset(data, 0xFF, w * h * d * sizeof(uint16_t) * 2);
+	ReadDicomImage(image, data, w, h);
 
-	image->setMinMaxWindow();
-	uint16_t * pixelData = (uint16_t*)image->getOutputData(16);
-	//memcpy(data + w * h*i, pixelData, w * h * sizeof(uint16_t));
-	unsigned int j = 0;
-	for (unsigned int x = 0; x < w; x++)
-		for (unsigned int y = 0; y < h; y++) {
-			j = 2 * (x + y * w);
-			data[j] = pixelData[x + y * w];
-			data[j + 1] = 0xFFFF;
-		}
-
-	auto tex = shared_ptr<Texture>(new Texture(GL_RG16, GL_RG, GL_UNSIGNED_SHORT, w, h, d, data));
+	auto tex = shared_ptr<Texture>(new Texture(w, h, d, GL_RG16, GL_RG, GL_UNSIGNED_SHORT, GL_LINEAR, data));
 	delete[] data;
 
 	return tex;
 }
-shared_ptr<Texture> LoadDicomVolume(const vector<string>& files, vec3& size) {
-	struct Slice {
-		DicomImage* image;
-		double location;
-	};
 
+shared_ptr<Texture> LoadDicomVolume(const vector<string>& files, vec3& size) {
 	vector<Slice> images;
 
 	// Get information
 	double spacingX = 0.0;
 	double spacingY = 0.0;
 	double thickness = 0.0;
-	OFCondition cnd;
 
-	for (unsigned int i = 0; i < files.size(); i++) {
-		DcmFileFormat fileFormat;
-		assert((cnd = fileFormat.loadFile(files[i].c_str())).good());
-		DcmDataset* dataset = fileFormat.getDataset();
-
-		if (i == 0) {
-			cnd = dataset->findAndGetFloat64(DCM_PixelSpacing, spacingX, 0);
-			cnd = dataset->findAndGetFloat64(DCM_PixelSpacing, spacingY, 1);
-			cnd = dataset->findAndGetFloat64(DCM_SliceThickness, thickness, 0);
-		}
-
+	for (unsigned int i = 0; i < (int)files.size(); i++) {
+		DicomImage* img;
 		double x;
-		cnd = dataset->findAndGetFloat64(DCM_SliceLocation, x, 0);
-
-		DicomImage* img = new DicomImage(files[i].c_str());
-		assert(img != NULL);
-		assert(img->getStatus() == EIS_Normal);
+		ReadDicomSlice(img, x, files[i], spacingX, spacingY, thickness);
 		images.push_back({ img, x });
 	}
 
@@ -145,22 +154,21 @@ shared_ptr<Texture> LoadDicomVolume(const vector<string>& files, vec3& size) {
 	printf("%fm x %fm x %fm\n", size.x, size.y, size.z);
 
 	uint16_t* data = new uint16_t[w * h * d * 2];
-	ZeroMemory(data, w * h * d * sizeof(uint16_t) * 2);
+	memset(data, 0xFFFF, w * h * d * sizeof(uint16_t) * 2);
 
-	for (unsigned int i = 0; i < images.size(); i++) {
-		images[i].image->setMinMaxWindow();
-		uint16_t* pixelData = (uint16_t*)images[i].image->getOutputData(16);
-		uint16_t* slice = data + 2 * i * w * h;
-		unsigned int j = 0;
-		for (unsigned int x = 0; x < w; x++)
-			for (unsigned int y = 0; y < h; y++) {
-				j = 2 * (x + y * w);
-				slice[j] = pixelData[x + y * w];
-				slice[j + 1] = 0xFFFF;
-			}
+	if (THREAD_COUNT > 1) {
+		printf("reading %d slices\n", d);
+		vector<thread> threads;
+		int s = ((int)images.size() + THREAD_COUNT - 1) / THREAD_COUNT;
+		for (int i = 0; i < (int)images.size(); i += s)
+			threads.push_back(thread(ReadDicomImages, data, images, i, i + s, w, h));
+		for (int i = 0; i < (int)threads.size(); i++)
+			threads[i].join();
+	} else {
+		ReadDicomImages(data, images, 0, (int)images.size(), w, h);
 	}
 
-	auto tex = shared_ptr<Texture>(new Texture(GL_RG16, GL_RG, GL_UNSIGNED_SHORT, w, h, d, data));
+	auto tex = shared_ptr<Texture>(new Texture(w, h, d, GL_RG16, GL_RG, GL_UNSIGNED_SHORT, GL_LINEAR, data));
 	delete[] data;
 
 	return tex;
@@ -251,10 +259,6 @@ void ImageLoader::LoadMask(const string& path, const shared_ptr<Texture>& textur
 	});
 
 	for (unsigned int i = 0; i < files.size(); i++) {
-		std::vector<unsigned char> rgba;
-		unsigned int w, h;
-		if (lodepng::decode(rgba, w, h, files[i].c_str())) continue;
-
 		// TODO: load into new texture and blit over
 	}
 }

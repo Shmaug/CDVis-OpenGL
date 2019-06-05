@@ -1,12 +1,20 @@
 #include "Mesh.hpp"
 
-Mesh::Mesh() : mElementCount(6) {
+#include "../ThirdParty/tiny_obj_loader.hpp"
+
+using namespace std;
+
+Mesh::Mesh(const string& filename) {
+
+}
+
+Mesh::Mesh() : mElementCount(6), mBounds(AABB(glm::vec3(), glm::vec3())) {
 	glGenVertexArrays(1, &mVAO);
 	glGenBuffers(1, &mVBO);
 	glGenBuffers(1, &mIBO);
 }
 Mesh::~Mesh() {
-	glDeleteBuffers(1, &mVAO);
+	glDeleteVertexArrays(1, &mVAO);
 	glDeleteBuffers(1, &mVBO);
 	glDeleteBuffers(1, &mIBO);
 }

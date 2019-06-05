@@ -14,19 +14,6 @@
 using namespace std;
 using namespace glm;
 
-void Shader::Uniform(GLuint program, const GLchar* name, int x) {
-	glUniform1i(glGetUniformLocation(program, name), x);
-}
-void Shader::Uniform(GLuint program, const GLchar* name, float x){
-	glUniform1f(glGetUniformLocation(program, name), x);
-}
-void Shader::Uniform(GLuint program, const GLchar* name, const vec3& v){
-	glUniform3f(glGetUniformLocation(program, name), v.x, v.y, v.z);
-}
-void Shader::Uniform(GLuint program, const GLchar* name, const mat4& m){
-	glUniformMatrix4fv(glGetUniformLocation(program, name), 1, GL_FALSE, &m[0][0]);
-}
-
 Shader::Shader() {}
 Shader::~Shader() {
 	for (const auto& p : mPrograms) {
@@ -34,6 +21,25 @@ Shader::~Shader() {
 		for (const auto& s : p.second.mShaders)
 			glDeleteShader(s);
 	}
+}
+
+void Shader::Uniform(GLuint program, const GLchar* name, int x) {
+	glUniform1i(glGetUniformLocation(program, name), x);
+}
+void Shader::Uniform(GLuint program, const GLchar* name, float x){
+	glUniform1f(glGetUniformLocation(program, name), x);
+}
+void Shader::Uniform(GLuint program, const GLchar* name, const vec2& v){
+	glUniform2f(glGetUniformLocation(program, name), v.x, v.y);
+}
+void Shader::Uniform(GLuint program, const GLchar* name, const vec3& v) {
+	glUniform3f(glGetUniformLocation(program, name), v.x, v.y, v.z);
+}
+void Shader::Uniform(GLuint program, const GLchar* name, const vec4& v) {
+	glUniform4f(glGetUniformLocation(program, name), v.x, v.y, v.z, v.w);
+}
+void Shader::Uniform(GLuint program, const GLchar* name, const mat4& m){
+	glUniformMatrix4fv(glGetUniformLocation(program, name), 1, GL_FALSE, &m[0][0]);
 }
 
 void Shader::EnableKeyword(string kw) {
@@ -56,12 +62,29 @@ GLuint Shader::Use() {
 }
 
 void Shader::AddShaderFile(GLenum type, string filename) {
-	mShadersToLink.emplace(type, filename);
+	ifstream file(filename);
+	if (!file) return;
+
+	stringstream sstr;
+	sstr << file.rdbuf();
+
+	file.close();
+
+	ShaderSource src;
+	src.mFile = filename;
+	src.mSource = sstr.str();
+
+	mShadersToLink.emplace(type, src);
+}
+void Shader::AddShaderSource(GLenum type, string source) {
+	ShaderSource src;
+	src.mFile = "";
+	src.mSource = source;
+	mShadersToLink.emplace(type, src);
 }
 
-GLuint CompileShader(GLenum type, string filename, const vector<string>& keywords) {
-	ifstream file(filename);
-	if (!file) return 0;
+GLuint Shader::CompileShader(GLenum type, const ShaderSource& source, const vector<string>& keywords) {
+	stringstream file(source.mSource);
 
 	stringstream sstr;
 
@@ -100,7 +123,7 @@ GLuint CompileShader(GLenum type, string filename, const vector<string>& keyword
 
 		string kw = "";
 		for (const auto& it : keywords) kw += it + " ";
-		printf("Error compiling %s with keywords %s: ", filename.c_str(), kw.c_str());
+		printf("Error compiling %s with keywords %s: ", source.mFile.c_str(), kw.c_str());
 
 		// red error text
 		#ifdef WINDOWS
@@ -115,6 +138,8 @@ GLuint CompileShader(GLenum type, string filename, const vector<string>& keyword
 		#endif
 
 		glDeleteShader(shader);
+
+		assert(false);
 		return 0;
 	} else {
 		return shader;
@@ -158,6 +183,8 @@ Shader::ShaderProgram Shader::LinkShader(const vector<string>& keywords) {
 		glDeleteProgram(pgm.mProgram);
 		for (const auto& s : pgm.mShaders)
 			glDeleteShader(s);
+
+		assert(false);
 	} else {
 		for (const auto& s : pgm.mShaders)
 			glDetachShader(pgm.mProgram, s);
@@ -173,8 +200,7 @@ void Shader::CompileAndLink() {
 
 	// create keyword variants
 	for (const auto& it : mShadersToLink) {
-		ifstream file(it.second);
-		if (!file) { printf("Failed to read %s\n", it.second.c_str()); return; }
+		stringstream file(it.second.mSource);
 		// scan for keywords
 		string line;
 		while (getline(file, line)) {
@@ -202,7 +228,7 @@ void Shader::CompileAndLink() {
 	}
 
 	for (const auto& it : mShadersToLink)
-		printf("%s ", it.second.c_str());
+		printf("%s ", it.second.mFile.c_str());
 	printf(": Compiling %d shader variants\n", (int)keywords.size());
 
 	for (auto& it : keywords) {

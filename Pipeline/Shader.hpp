@@ -15,6 +15,7 @@ public:
 	Shader();
 	~Shader();
 
+	void AddShaderSource(GLenum type, std::string source);
 	void AddShaderFile(GLenum type, std::string filename);
 	void CompileAndLink();
 
@@ -26,10 +27,16 @@ public:
 	// global utility functions
 	static void Uniform(GLuint program, const GLchar* name, int x);
 	static void Uniform(GLuint program, const GLchar* name, float x);
+	static void Uniform(GLuint program, const GLchar* name, const glm::vec2& x);
 	static void Uniform(GLuint program, const GLchar* name, const glm::vec3& x);
+	static void Uniform(GLuint program, const GLchar* name, const glm::vec4& x);
 	static void Uniform(GLuint program, const GLchar* name, const glm::mat4& x);
 
 private:
+	struct ShaderSource {
+		std::string mFile;
+		std::string mSource;
+	};
 	struct ShaderProgram {
 		GLuint mProgram;
 		std::vector<GLuint> mShaders;
@@ -41,7 +48,8 @@ private:
 	// indexed by keyword combo
 	std::unordered_map<std::string, ShaderProgram> mPrograms;
 
-	std::unordered_map<GLenum, std::string> mShadersToLink;
+	std::unordered_map<GLenum, ShaderSource> mShadersToLink;
 
+	GLuint CompileShader(GLenum type, const ShaderSource& source, const std::vector<std::string>& keywords);
 	ShaderProgram LinkShader(const std::vector<std::string>& keywords);
 };

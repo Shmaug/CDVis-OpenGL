@@ -1,7 +1,10 @@
 #pragma once
 
 #include <vector>
+#pragma warning(push)
+#pragma warning(disable: 26495)
 #include <openvr.h>
+#pragma warning(pop)
 
 #include "MeshRenderer.hpp"
 #include "VRInteractable.hpp"
@@ -53,7 +56,9 @@ public:
 	inline glm::quat DeltaDeviceRotation() const { return mDeltaDeviceRotation; }
 
 	void Draw(Camera& camera) override;
-	void UpdateDevice(vr::IVRSystem* hmd, const vr::TrackedDevicePose_t& pose);
+	void UpdateDevice(const std::vector<std::shared_ptr<Object>>& scene, vr::IVRSystem* hmd, const vr::TrackedDevicePose_t& pose);
+
+	unsigned int RenderQueue() override { return 1100; }
 
 private:
 	const unsigned int mDeviceIndex;

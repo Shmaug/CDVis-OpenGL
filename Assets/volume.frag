@@ -11,6 +11,8 @@ in vs_out {
 
 uniform float StepSize;
 
+uniform vec2 InvResolution;
+
 uniform mat4 ViewToObject;
 uniform mat4 InverseProjection;
 uniform vec3 CameraPosition;
@@ -26,25 +28,12 @@ vec2 RayCube(vec3 ro, vec3 rd, vec3 extents) {
     vec3 tMax = (extents - ro) / rd;
     vec3 t1 = min(tMin, tMax);
     vec3 t2 = max(tMin, tMax);
-    float tNear = max(max(t1.x, t1.y), t1.z);
-    float tFar = min(min(t2.x, t2.y), t2.z);
-    return vec2(tNear, tFar);
+    return vec2(max(max(t1.x, t1.y), t1.z), min(min(t2.x, t2.y), t2.z));
 }
 float RayPlane(vec3 ro, vec3 rd, vec3 planep, vec3 planen) {
 	float d = dot(planen, rd);
 	float t = dot(planep - ro, planen);
 	return d > 1e-5 ? (t / d) : (t > 0 ? 1e5 : -1e5);
-}
-
-vec4 Sample(vec3 p) {
-	vec4 s;
-
-	vec2 ra = textureLod(Volume, p, 0.0).rg;
-	s.rgb = vec3(ra.r);
-	s.a = ra.g;
-	s.a = (dot((p - .5) - PlanePoint, PlaneNormal) < 0) ? 0 : s.a;
-
-	return s;
 }
 
 // depth texture to object-space ray depth
@@ -59,21 +48,28 @@ float DepthTextureToObjectDepth(vec3 ro, vec3 screenPos) {
 	return length((ViewToObject * viewSpacePosition).xyz - ro);
 }
 
+vec4 Sample(vec3 p) {
+	vec4 s;
+
+	vec2 ra = textureLod(Volume, p, 0.0).rg;
+	s.rgb = vec3(ra.r);
+	s.a = ra.g;
+	s.a = (dot((p - .5) - PlanePoint, PlaneNormal) < 0) ? 0 : s.a;
+
+	return s;
+}
+
 void main() {
 	vec3 ro = CameraPosition;
 	vec3 rd = normalize(i.rd.xyz);
 
 	vec2 intersect = RayCube(ro, rd, vec3(.5));
 	intersect.x = max(0, intersect.x);
-
-	#ifdef PLANE
 	intersect.x = max(intersect.x, RayPlane(ro, rd, PlanePoint, PlaneNormal));
-	#endif
 	
 	// depth buffer intersection
 	float z = DepthTextureToObjectDepth(ro, i.sp);
 	intersect.y = min(intersect.y, z);
-
 	if (intersect.y < intersect.x) discard;
 
 	ro += .5; // cube has a radius of .5, transform to UVW space

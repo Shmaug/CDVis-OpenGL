@@ -31,7 +31,7 @@ vec2 Sample(ivec3 p) {
 	#ifndef MASK
 	s.g = s.r;
 	#endif
-	
+
 	s.g = max(0.0, (s.g - Threshold) / (1.0 - Threshold)); // subtractive for soft edges
 	s.g *= Density;
 

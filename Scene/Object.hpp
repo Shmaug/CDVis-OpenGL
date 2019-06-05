@@ -5,6 +5,10 @@
 #include <vector>
 #include <memory>
 
+#include "../Util/Bounds.hpp"
+
+class Camera;
+
 class Object : public std::enable_shared_from_this<Object> {
 public:
 	Object();
@@ -30,6 +34,11 @@ public:
 
 	inline void LocalPosition(float x, float y, float z) { mLocalPosition.x = x; mLocalPosition.y = y; mLocalPosition.z = z; Dirty(); }
 	inline void LocalScale(float x, float y, float z) { mLocalScale.x = x; mLocalScale.y = y; mLocalScale.z = z; Dirty(); }
+
+	virtual unsigned int RenderQueue();
+	virtual void Draw(Camera& camera);
+	virtual void DrawGizmo(Camera& camera);
+	virtual Bounds Bounds();
 
 private:
 	bool mTransformDirty;

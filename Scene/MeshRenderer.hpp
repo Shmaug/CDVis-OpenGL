@@ -3,12 +3,11 @@
 #include <memory>
 
 #include "Object.hpp"
-#include "Renderer.hpp"
 #include "../Pipeline/Texture.hpp"
 #include "../Pipeline/Shader.hpp"
 #include "../Pipeline/Mesh.hpp"
 
-class MeshRenderer : public Object, public Renderer {
+class MeshRenderer : public Object {
 public:
 	bool mVisible;
 
@@ -27,7 +26,14 @@ public:
 	void Uniform(std::string name, const glm::mat4& x);
 	void Uniform(std::string name, const std::shared_ptr<Texture>& x);
 
-	virtual void Draw(Camera& camera);
+	void SetUniforms(GLuint shader);
+	virtual void Draw(Camera& camera) override;
+	inline virtual ::Bounds Bounds() override {
+		return mMesh ?
+			::Bounds(WorldPosition(), mMesh->Bounds().mExtents, WorldRotation()) :
+			::Bounds(WorldPosition(), glm::vec3(), WorldRotation());
+	}
+	inline virtual unsigned int RenderQueue() override { return 1000; }
 
 private:
 	struct ShaderUniform {

@@ -67,3 +67,8 @@ void Object::Dirty() {
 		if (shared_ptr<Object> o = mChildren[i].lock())
 			o->Dirty();
 }
+
+unsigned int Object::RenderQueue() { return 1000; }
+void Object::Draw(Camera& camera) {}
+void Object::DrawGizmo(Camera& camera) {}
+::Bounds Object::Bounds() { return ::Bounds(WorldPosition(), vec3()); };
