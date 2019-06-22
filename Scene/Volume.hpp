@@ -6,11 +6,12 @@
 
 #include "Object.hpp"
 #include "Camera.hpp"
+#include "VRInteractable.hpp"
 #include "../Pipeline/Texture.hpp"
 #include "../Pipeline/Shader.hpp"
 #include "../Pipeline/Mesh.hpp"
 
-class Volume : public Object {
+class Volume : public Object, public VRInteractable {
 public:
 	Volume();
 	~Volume();
@@ -27,10 +28,13 @@ public:
 	inline void Exposure(float x) { mExposure = x; mExposure = fmaxf(mExposure, 0.f); mDirty = true; }
 	inline void Threshold(float x) { mThreshold = x; mThreshold = fminf(fmaxf(mThreshold, 0.f), 1.f); mDirty = true; }
 
+	inline virtual bool Draggable() override { return true; }
+
 	void Texture(const std::shared_ptr<::Texture>& tex);
 
 	::Bounds Bounds() override { return ::Bounds(WorldPosition(), WorldScale() * .5f, WorldRotation()); };
 	void Draw(Camera& camera) override;
+	void DrawGizmo(Camera& camera) override;
 
 	unsigned int RenderQueue() override { return 5000; }
 

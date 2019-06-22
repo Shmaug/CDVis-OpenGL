@@ -10,7 +10,9 @@ public:
 	static void LoadAssets();
 	static void Cleanup();
 
+	static std::shared_ptr<Mesh> gWireCubeMesh;
 	static std::shared_ptr<Mesh> gCubeMesh;
+	static std::shared_ptr<Mesh> gLightMesh;
 	static std::shared_ptr<Mesh> gPenMesh;
 	static std::shared_ptr<Mesh> gDialMesh;
 

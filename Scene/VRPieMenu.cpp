@@ -13,7 +13,7 @@ constexpr unsigned int PieResolution = 64;
 VRPieMenu::VRPieMenu(float radius, unsigned int sliceCount, const shared_ptr<Texture>& icons) 
 	: MeshRenderer(), mRadius(radius), mSliceCount(sliceCount), mPressedSlice(-1), mHoveredSlice(-1) {
 	Mesh(shared_ptr<::Mesh>(new ::Mesh()));
-	Shader(AssetDatabase::gTexturedShader);
+	Shader(AssetDatabase::gPieShader);
 	Uniform("Texture", icons);
 
 	UpdateMesh();
@@ -55,7 +55,6 @@ void VRPieMenu::UpdateMesh() {
 			mVertices[j++] = { { x * mRadius, 0, z * mRadius }, c, { x, z } };
 		}
 	}
-
 	for (unsigned int s = 0; s < mSliceCount; s++) {
 		mIndices[i++] = j;
 		mIndices[i++] = j + 1;
@@ -81,30 +80,33 @@ void VRPieMenu::UpdateMesh() {
 		float u0 = (float)s / mSliceCount;
 		float u1 = u0 + 1.f / (float)mSliceCount;
 
-		mVertices[j++] = { { x - b, y, z + b }, c, { u0, 0 } };
-		mVertices[j++] = { { x + b, y, z + b }, c, { u1, 0 } };
-		mVertices[j++] = { { x + b, y, z - b }, c, { u1, 1 } };
-		mVertices[j++] = { { x - b, y, z - b }, c, { u0, 1 } };
+		mVertices[j++] = { { x - b, y, z + b }, c, { u0, 0.f } };
+		mVertices[j++] = { { x + b, y, z + b }, c, { u1, 0.f } };
+		mVertices[j++] = { { x + b, y, z - b }, c, { u1, 1.f } };
+		mVertices[j++] = { { x - b, y, z - b }, c, { u0, 1.f } };
 	}
+
+	Mesh()->BindVAO();
 
 	Mesh()->BindVBO();
 	glBufferData(GL_ARRAY_BUFFER, sizeof(PieVertex) * mVertices.size(), mVertices.data(), GL_STATIC_DRAW);
 
 	Mesh()->BindIBO();
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(GLint) * mIndices.size(), mIndices.data(), GL_STATIC_DRAW);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(GLuint) * mIndices.size(), mIndices.data(), GL_STATIC_DRAW);
 
 	glEnableVertexAttribArray(0);
-	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(GLfloat) * 3, nullptr);
-	glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(GLfloat) * 4, nullptr);
-	glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(GLfloat) * 2, nullptr);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(PieVertex), (void*)offsetof(PieVertex, pos));
+	glEnableVertexAttribArray(1);
+	glVertexAttribPointer(1, 4, GL_FLOAT, GL_FALSE, sizeof(PieVertex), (void*)offsetof(PieVertex, col));
+	glEnableVertexAttribArray(2);
+	glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(PieVertex), (void*)offsetof(PieVertex, tex));
 
-	Mesh()->ElementCount(mIndices.size());
+	Mesh()->ElementCount((int)mIndices.size());
 	glBindVertexArray(0);
-
-	Mesh()->Bounds(::AABB(vec3(0.f), vec3(.5f)));
 }
 bool VRPieMenu::UpdateTouch(const vec2& touchPos) {
-	mTouchPos = touchPos;
+	Uniform("TouchPos", touchPos);
+
 	float angle = atan2f(touchPos.y, touchPos.x) + half_pi<float>();
 	if (angle < 0) angle += two_pi<float>();
 	if (angle > two_pi<float>()) angle -= two_pi<float>();
@@ -126,10 +128,9 @@ bool VRPieMenu::UpdateTouch(const vec2& touchPos) {
 void VRPieMenu::Draw(Camera& camera) {
 	if (!mVisible) return;
 
+	glDisable(GL_CULL_FACE);
 	glEnable(GL_BLEND);
 	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-	Mesh()->BindVAO();
 
 	Shader()->DisableKeyword("TEXTURED");
 	GLuint p = Shader()->Use();
@@ -138,7 +139,11 @@ void VRPieMenu::Draw(Camera& camera) {
 	Shader::Uniform(p, "ObjectToWorld", ObjectToWorld());
 	Shader::Uniform(p, "ViewProjection", camera.ViewProjection());
 
-	glDrawElements(GL_TRIANGLES, Mesh()->ElementCount() - mSliceCount * 6, GL_UNSIGNED_INT, 0);
+	GLsizei v = Mesh()->ElementCount() - mSliceCount * 6;
+
+	Mesh()->BindVAO();
+	glDrawElements(GL_TRIANGLES, v, GL_UNSIGNED_INT, nullptr);
+
 
 	Shader()->EnableKeyword("TEXTURED");
 	p = Shader()->Use();
@@ -147,10 +152,12 @@ void VRPieMenu::Draw(Camera& camera) {
 	Shader::Uniform(p, "ObjectToWorld", ObjectToWorld());
 	Shader::Uniform(p, "ViewProjection", camera.ViewProjection());
 
-	glDrawElementsBaseVertex(GL_TRIANGLES, mSliceCount * 6, GL_UNSIGNED_INT, 0, Mesh()->ElementCount() - mSliceCount * 6);
+	Mesh()->BindVAO();
+	glDrawElements(GL_TRIANGLES, mSliceCount * 6, GL_UNSIGNED_INT, (void*)(v * sizeof(GLuint)));
 
 	glBindVertexArray(0);
 	glUseProgram(0);
 
 	glDisable(GL_BLEND);
+	glEnable(GL_CULL_FACE);
 }

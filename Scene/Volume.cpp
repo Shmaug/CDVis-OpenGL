@@ -1,5 +1,7 @@
 #include "Volume.hpp"
 
+#include <glm/gtx/quaternion.hpp>
+
 #include "../Pipeline/AssetDatabase.hpp"
 
 #pragma warning(disable:26451)
@@ -76,6 +78,23 @@ void Volume::Precompute() {
 	glUseProgram(0);
 
 	mDirty = false;
+}
+
+void Volume::DrawGizmo(Camera& camera) {
+	AssetDatabase::gTexturedShader->ClearKeywords();
+	AssetDatabase::gTexturedShader->EnableKeyword("NOTEXTURE");
+
+	GLuint p = AssetDatabase::gTexturedShader->Use();
+
+	Shader::Uniform(p, "ObjectToWorld", translate(mat4(1.f), Bounds().mCenter) * toMat4(Bounds().mOrientation) * scale(mat4(1.f), Bounds().mExtents));
+	Shader::Uniform(p, "ViewProjection", camera.ViewProjection());
+	Shader::Uniform(p, "Color", vec4(1.f, 1.f, 1.f, 1.f));
+
+	AssetDatabase::gWireCubeMesh->BindVAO();
+	glDrawElements(GL_LINES, AssetDatabase::gWireCubeMesh->ElementCount(), GL_UNSIGNED_INT, 0);
+
+	glUseProgram(0);
+	glBindVertexArray(0);
 }
 
 void Volume::Draw(Camera& camera) {

@@ -57,8 +57,6 @@ private:
 	glm::mat4 mViewProjection;
 
 	std::shared_ptr<Mesh> mGizmoMesh;
-	static unsigned int sCameraCount;
-	static std::shared_ptr<Shader> sGizmoShader;
 
 	bool mFramebufferDirty;
 	GLuint mFrameBuffer;

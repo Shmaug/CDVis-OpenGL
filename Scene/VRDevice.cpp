@@ -48,7 +48,7 @@ void VRDevice::UpdateDevice(const vector<shared_ptr<Object>>& scene, vr::IVRSyst
 	static unordered_set<shared_ptr<Object>> boundsIntersect;
 	boundsIntersect.clear();
 	for (const auto& it : scene)
-		if (it->Bounds().Intersects(mDevicePosition, .025f))
+		if (it->Bounds().Intersects(mDevicePosition, .04f))
 			boundsIntersect.insert(dynamic_pointer_cast<Object>(it));
 
 	for (auto it = mHovered.begin(); it != mHovered.end();) {
@@ -97,7 +97,7 @@ void VRDevice::UpdateDevice(const vector<shared_ptr<Object>>& scene, vr::IVRSyst
 
 				d->mObject = dynamic_pointer_cast<VRInteractable>(i);
 				d->mDragPos = WorldToObject() * vec4(op, 1.f);
-				d->mDragRotation = or * inverse(mDeviceRotation);
+				d->mDragRotation = inverse(mDeviceRotation) * or;
 
 				TriggerHapticPulse(600);
 				g->DragStart(this_controller);

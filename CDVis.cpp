@@ -21,10 +21,11 @@
 #include <gl/wglew.h>
 #endif
 
-#include "Scene/VRDevice.hpp"
 #include "Scene/Camera.hpp"
 #include "Scene/Volume.hpp"
 #include "Scene/MeshRenderer.hpp"
+#include "Scene/VRDevice.hpp"
+#include "Scene/VRPieMenu.hpp"
 #include "Pipeline/AssetDatabase.hpp"
 #include "Pipeline/Shader.hpp"
 #include "Pipeline/Mesh.hpp"
@@ -35,6 +36,13 @@
 
 using namespace std;
 using namespace glm;
+
+enum VRTOOL {
+	VRTOOL_PLANE,
+	VRTOOL_PAINT,
+	VRTOOL_ERASE,
+	NUM_VRTOOLS
+};
 
 // glfw functions
 void Resize(GLFWwindow*, int, int);
@@ -74,7 +82,12 @@ vr::TrackedDevicePose_t vrTrackedDevices[vr::k_unMaxTrackedDeviceCount];
 
 shared_ptr<Mesh> gScreenQuadMesh;
 
+shared_ptr<VRPieMenu> gPieMenu;
+shared_ptr<MeshRenderer> gLight;
+
 vector<shared_ptr<Object>> gScene;
+
+VRTOOL gCurTool = VRTOOL_PLANE;
 
 void Error(int error, const char* desc) {
 	printf("GLFW error %d: %s\n", error, desc);
@@ -208,10 +221,14 @@ bool InitVR() {
 	for (unsigned int i = 0; i < vr::k_unMaxTrackedDeviceCount; i++)
 		vrDevices.push_back(nullptr);
 
+	gPieMenu = shared_ptr<VRPieMenu>(new VRPieMenu(.1f, NUM_VRTOOLS, AssetDatabase::gPieIconTexture));
+	gPieMenu->LocalPosition(0, .02f, -.05f);
+	gPieMenu->mVisible = false;
+	gScene.push_back(gPieMenu);
+
 	vrEnable = true;
 	return true;
 }
-
 void InitScene() {
 	AssetDatabase::LoadAssets();
 
@@ -246,6 +263,7 @@ void InitScene() {
 	#pragma endregion
 
 	auto v = shared_ptr<Volume>(new Volume());
+	v->LocalPosition(0.f, 1.f, 0.f);
 	v->LocalScale(.5f, .5f, .5f);
 	gVolumes.push_back(v);
 	gScene.push_back(v);
@@ -256,6 +274,14 @@ void InitScene() {
 	gCamera->PixelHeight(gWindowSize.y);
 	gCamera->LocalPosition(0.f, 0.f, -1.25f);
 	gScene.push_back(gCamera);
+
+	gLight = shared_ptr<MeshRenderer>(new MeshRenderer());
+	gLight->mDraggable = true;
+	gLight->Mesh(AssetDatabase::gLightMesh);
+	gLight->Shader(AssetDatabase::gTexturedShader);
+	gLight->Uniform("Color", vec4(.05f, .05f, .05f, 1.f));
+	gLight->EnableKeyword("NOTEXTURE");
+	gScene.push_back(gLight);
 
 	if (!InitVR()) {
 		printf("Failed to initialize OpenVR\n");
@@ -337,19 +363,11 @@ void GetVRRenderModel(unsigned int index, MeshRenderer* renderer) {
 
 	vr::EVRRenderModelError error;
 	while ((error = vrRenderModelInterface->LoadRenderModel_Async(name, &renderModel)) == vr::VRRenderModelError_Loading)
-		#ifdef WINDOWS
-		Sleep(1);
-		#else
-		throw exception();
-		#endif
+		this_thread::sleep_for(1ms);
 	if (error != vr::VRRenderModelError_None) return;
 
 	while ((error = vrRenderModelInterface->LoadTexture_Async(renderModel->diffuseTextureId, &renderModelDiffuse)) == vr::VRRenderModelError_Loading)
-		#ifdef WINDOWS
-		Sleep(1);
-		#else
-		throw exception();
-		#endif
+		this_thread::sleep_for(1ms);
 
 	if (error != vr::VRRenderModelError_None) {
 		vrRenderModelInterface->FreeRenderModel(renderModel);
@@ -359,6 +377,7 @@ void GetVRRenderModel(unsigned int index, MeshRenderer* renderer) {
 	if (vrMeshes.count(name)) {
 		// we've already created this mesh earlier
 		renderer->Mesh(vrMeshes.at(name));
+		renderer->Uniform("Color", vec4(1.f, 1.f, 1.f, 1.f));
 		renderer->Uniform("Texture", vrTextures.at(renderModel->diffuseTextureId));
 		return;
 	}
@@ -389,7 +408,7 @@ void GetVRRenderModel(unsigned int index, MeshRenderer* renderer) {
 	glEnableVertexAttribArray(2);
 	glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, sizeof(vr::RenderModel_Vertex_t), (void*)offsetof(vr::RenderModel_Vertex_t, rfTextureCoord));
 
-	mesh->ElementCount(indexBuffer.size());
+	mesh->ElementCount((int)indexBuffer.size());
 	
 	glBindVertexArray(0);
 
@@ -406,6 +425,7 @@ void GetVRRenderModel(unsigned int index, MeshRenderer* renderer) {
 
 	renderer->Mesh(mesh);
 	renderer->Uniform("Texture", texture);
+	renderer->Uniform("Color", vec4(1.f, 1.f, 1.f, 1.f));
 
 	vrRenderModelInterface->FreeRenderModel(renderModel);
 	vrRenderModelInterface->FreeTexture(renderModelDiffuse);
@@ -514,6 +534,7 @@ void Update() {
 	#pragma region VR Controls
 	static vector<shared_ptr<VRDevice>> trackedControllers;
 	if (gHmd) {
+		gPieMenu->mVisible = false;
 		// Process SteamVR events (controller added/removed/etc)
 		vr::VREvent_t event;
 		while (gHmd->PollNextEvent(&event, sizeof(event))) {}
@@ -540,6 +561,18 @@ void Update() {
 			switch (gHmd->GetTrackedDeviceClass(i)) {
 			case vr::TrackedDeviceClass_Controller:
 				trackedControllers.push_back(vrDevices[i]);
+				if (vrDevices[i]->ButtonTouched(vr::k_EButton_Axis0)) {
+					gPieMenu->Parent(vrDevices[i]);
+					gPieMenu->mVisible = true;
+					unsigned short x = 0;
+					if (gPieMenu->UpdateTouch(*(vec2*)& vrDevices[i]->GetState().rAxis[0])) x = 600;
+					if (vrDevices[i]->ButtonPressed(vr::k_EButton_Axis0) && gCurTool != gPieMenu->Hovered()) {
+						gCurTool = (VRTOOL)gPieMenu->Hovered();
+						gPieMenu->Pressed(gCurTool);
+						x = 1000;
+					}
+					if (x) vrDevices[i]->TriggerHapticPulse(x);
+				}
 				break;
 
 			case vr::TrackedDeviceClass_HMD:
@@ -553,8 +586,6 @@ void Update() {
 				break;
 			}
 		}
-
-		//vrInteraction->ProcessInput(scene, trackedControllers, mVolume, delta);
 	}
 	#pragma endregion
 }

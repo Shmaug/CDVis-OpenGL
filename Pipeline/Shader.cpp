@@ -14,7 +14,7 @@
 using namespace std;
 using namespace glm;
 
-Shader::Shader() {}
+Shader::Shader() : mKeywordList(""), mKeywordListDirty(true) {}
 Shader::~Shader() {
 	for (const auto& p : mPrograms) {
 		glDeleteProgram(p.second.mProgram);
@@ -42,21 +42,26 @@ void Shader::Uniform(GLuint program, const GLchar* name, const mat4& m){
 	glUniformMatrix4fv(glGetUniformLocation(program, name), 1, GL_FALSE, &m[0][0]);
 }
 
-void Shader::EnableKeyword(string kw) {
-	if (mAvailableKeywords.count(kw))
+void Shader::EnableKeyword(const string& kw) {
+	if (mAvailableKeywords.count(kw)) {
+		mKeywordListDirty = true;
 		mActiveKeywords.insert(kw);
+	}
 }
-void Shader::DisableKeyword(string kw) {
+void Shader::DisableKeyword(const string& kw) {
+	mKeywordListDirty = true;
 	mActiveKeywords.erase(kw);
 }
 
 GLuint Shader::Use() {
-	string kw = "";
-	for (const auto& k : mActiveKeywords)
-		kw += k + " ";
-	assert(mPrograms.count(kw));
+	if (mKeywordListDirty) {
+		mKeywordList = "";
+		for (const auto& k : mActiveKeywords)
+			mKeywordList += k + " ";
+	}
 
-	GLuint p = mPrograms.at(kw).mProgram;
+	assert(mPrograms.count(mKeywordList));
+	GLuint p = mPrograms.at(mKeywordList).mProgram;
 	glUseProgram(p);
 	return p;
 }

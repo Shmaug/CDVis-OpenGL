@@ -21,8 +21,9 @@ public:
 
 	GLuint Use();
 
-	void EnableKeyword(std::string keyword);
-	void DisableKeyword(std::string keyword);
+	inline void ClearKeywords() { mActiveKeywords.clear(); mKeywordListDirty = false; mKeywordList = ""; }
+	void EnableKeyword(const std::string& keyword);
+	void DisableKeyword(const std::string& keyword);
 
 	// global utility functions
 	static void Uniform(GLuint program, const GLchar* name, int x);
@@ -44,6 +45,9 @@ private:
 
 	std::unordered_set<std::string> mAvailableKeywords;
 	std::unordered_set<std::string> mActiveKeywords;
+
+	bool mKeywordListDirty;
+	std::string mKeywordList;
 
 	// indexed by keyword combo
 	std::unordered_map<std::string, ShaderProgram> mPrograms;

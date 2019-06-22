@@ -53,6 +53,7 @@ struct Bounds {
 
 	Bounds(const glm::vec3& center, const glm::vec3& extents) : mCenter(center), mExtents(extents), mOrientation(glm::quat(1.f, 0.f, 0.f, 0.f)) {}
 	Bounds(const glm::vec3& center, const glm::vec3& extents, const glm::quat& orientation) : mCenter(center), mExtents(extents), mOrientation(orientation) {}
+	
 
 	inline bool Intersects(const glm::vec3& point) const {
 		glm::vec3 s = inverse(mOrientation) * (point - mCenter);

@@ -6,7 +6,7 @@
 
 class VRDevice;
 
-class VRDial : public MeshRenderer, public VRInteractable {
+class VRDial : public MeshRenderer {
 public:
 	VRDial(float val = .2f, float min = 0.f, float max = 1.f, unsigned int steps = 20);
 	~VRDial();

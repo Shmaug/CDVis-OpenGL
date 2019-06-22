@@ -2,13 +2,11 @@
 
 #include <gl/glew.h>
 
+#include "../Pipeline/AssetDatabase.hpp"
 #include "../Pipeline/Shader.hpp"
 
 using namespace std;
 using namespace glm;
-
-unsigned int Camera::sCameraCount = 0;
-shared_ptr<Shader> Camera::sGizmoShader = 0;
 
 Camera::Camera() : Object(),
 	mOrthographic(false), mOrthographicSize(0),
@@ -17,31 +15,8 @@ Camera::Camera() : Object(),
 	mPixelWidth(1600), mPixelHeight(900),
 	mColorBuffer(0), mDepthBuffer(0), mResolveColorBuffer(0), mResolveDepthBuffer(0), mResolveFrameBuffer(0), mFrameBuffer(0), mSampleCount(4),
 	mView(mat4(1.f)), mProjection(mat4(1.f)), mViewProjection(mat4(1.f)), mFramebufferDirty(true),
-	mGizmoMesh(0) {
-
-	sCameraCount++;
-	if (!sGizmoShader) {
-		sGizmoShader = shared_ptr<::Shader>(new ::Shader());
-		sGizmoShader->AddShaderSource(GL_VERTEX_SHADER,
-			"#version 460\n"
-			"layout(location = 0) in vec3 vertex;"
-			"uniform mat4 ObjectToWorld;"
-			"uniform mat4 ViewProjection;"
-			"void main() { gl_Position = ViewProjection * ObjectToWorld * vec4(vertex, 1.0); }"
-		);
-		sGizmoShader->AddShaderFile(GL_FRAGMENT_SHADER,
-			"#version 460\n"
-			"uniform vec4 Color;"
-			"out vec4 FragColor;"
-			"void main() { FragColor = Color; }"
-		);
-		sGizmoShader->CompileAndLink();
-	}
-}
+	mGizmoMesh(0) {}
 Camera::~Camera() {
-	sCameraCount--;
-	if (sCameraCount == 0) sGizmoShader.reset();
-	
 	glDeleteFramebuffers(1, &mFrameBuffer);
 	glDeleteFramebuffers(1, &mResolveFrameBuffer);
 	glDeleteTextures(1, &mColorBuffer);
@@ -197,11 +172,14 @@ bool Camera::UpdateTransform() {
 void Camera::DrawGizmo(Camera& camera) {
 	if (!mGizmoMesh) return;
 
-	GLuint p = sGizmoShader->Use();
+	AssetDatabase::gTexturedShader->ClearKeywords();
+	AssetDatabase::gTexturedShader->EnableKeyword("NOTEXTURE");
 
-	sGizmoShader->Uniform(p, "ObjectToWorld", mat4(1.f));
-	sGizmoShader->Uniform(p, "ViewProjection", camera.ViewProjection());
-	sGizmoShader->Uniform(p, "Color", vec4(1.f));
+	GLuint p = AssetDatabase::gTexturedShader->Use();
+
+	Shader::Uniform(p, "ObjectToWorld", mat4(1.f));
+	Shader::Uniform(p, "ViewProjection", camera.ViewProjection());
+	Shader::Uniform(p, "Color", vec4(1.f));
 
 	mGizmoMesh->BindVAO();
 	glDrawElements(GL_LINES, mGizmoMesh->ElementCount(), GL_UNSIGNED_INT, 0);

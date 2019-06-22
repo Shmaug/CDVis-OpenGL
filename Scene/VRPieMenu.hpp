@@ -30,12 +30,10 @@ private:
 	std::vector<PieVertex> mVertices;
 	std::vector<GLuint> mIndices;
 
-	std::shared_ptr<Texture> mIconTexture;
 	unsigned int mSliceCount;
 	int mHoveredSlice;
 	int mPressedSlice;
 	float mRadius;
-	glm::vec2 mTouchPos;
 
 	void UpdateMesh();
 };

@@ -48,7 +48,9 @@ configure_file("Assets/icons.png"		"Assets/icons.png" COPYONLY)
 configure_file("Assets/pen_diffuse.png"	"Assets/pen_diffuse.png" COPYONLY)
 configure_file("Assets/pie_icons.png"	"Assets/pie_icons.png" COPYONLY)
 
-configure_file("Assets/tools.fbx"		"Assets/tools.fbx" COPYONLY)
+configure_file("Assets/light.obj"		"Assets/light.obj" COPYONLY)
+configure_file("Assets/pen.obj"			"Assets/pen.obj" COPYONLY)
+configure_file("Assets/dial.obj"		"Assets/dial.obj" COPYONLY)
 
 configure_file("Assets/blit.vert"		"Assets/blit.vert" COPYONLY)
 configure_file("Assets/blit.frag"		"Assets/blit.frag" COPYONLY)

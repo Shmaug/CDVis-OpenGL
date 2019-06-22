@@ -34,7 +34,7 @@ public:
 	VRTOOL mCurTool;
 
 private:
-	class HudText : public TextRenderer, public VRInteractable {
+	class HudText : public TextRenderer {
 	public:
 		HudText() : TextRenderer() {};
 

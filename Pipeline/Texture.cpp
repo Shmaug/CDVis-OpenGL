@@ -8,8 +8,8 @@ Texture::Texture(const string& filename) {
 	int x, y, channels;
 	if (stbi_uc* res = stbi_load(filename.c_str(), &x, &y, &channels, 0)) {
 		mWidth = x;
-		mHeight = x;
-		mDepth = 1;
+		mHeight = y;
+		mDepth = 0;
 
 		switch (channels) {
 		case 1:
@@ -34,7 +34,7 @@ Texture::Texture(const string& filename) {
 
 		glGenTextures(1, &mTexture);
 		glBindTexture(GL_TEXTURE_2D, mTexture);
-		glTexImage3D(GL_TEXTURE_2D, 0, mInternalFormat, mWidth, mHeight, mDepth, 0, mFormat, mType, res);
+		glTexImage2D(GL_TEXTURE_2D, 0, mInternalFormat, mWidth, mHeight, 0, mFormat, mType, res);
 
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
